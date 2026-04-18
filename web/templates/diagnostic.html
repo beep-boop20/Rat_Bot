@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block header %}Diagnostics{% endblock %}
+
+{% block content %}
+<div class="diagnostic-container">
+    <div class="diagnostic-grid">
+        <div class="glass-card diagnostic-card diagnostic-card-config full-width">
+            <h3>Configuration</h3>
+            <div class="diagnostic-items">
+                <div class="diagnostic-item">
+                    <span class="diagnostic-label">Discord Token</span>
+                    <span class="diagnostic-value">
+                        {% if diagnostic.token_configured %}
+                        <span class="badge badge-success">Configured</span>
+                        {% else %}
+                        <span class="badge badge-error">Not Set</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="diagnostic-item">
+                    <span class="diagnostic-label">Active Server</span>
+                    <span class="diagnostic-value">
+                        <span class="badge badge-info">{{ diagnostic.current_server }}</span>
+                    </span>
+                </div>
+                <div class="diagnostic-item">
+                    <span class="diagnostic-label">Bot Connection</span>
+                    <span class="diagnostic-value">
+                        {% if diagnostic.bot_online %}
+                        <span class="badge badge-success">
+                            <span class="status-dot status-online"></span> Online
+                        </span>
+                        {% else %}
+                        <span class="badge badge-error">
+                            <span class="status-dot status-offline"></span> Offline
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card full-width storage-card">
+            <h3>Server Storage</h3>
+            <div class="table-container storage-table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Server Name</th>
+                            <th>ID</th>
+                            <th>Created</th>
+                            <th>Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for server in diagnostic.server_stats %}
+                        <tr>
+                            <td>
+                                <span class="storage-server-name" title="{{ server.name }}">{{ server.name }}</span>
+                                {% if server.is_current %}
+                                <span class="badge badge-success storage-current-badge">Current</span>
+                                {% endif %}
+                                <div class="storage-db-path" title="{{ server.db_path }}">
+                                    {{ server.db_path }}
+                                </div>
+                            </td>
+                            <td class="storage-muted">{{ server.id }}</td>
+                            <td class="storage-muted">{{ server.created_at }}</td>
+                            <td class="storage-size">{{ server.db_size }} MB</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="glass-card full-width">
+            <h3>Troubleshooting</h3>
+            {% if not diagnostic.bot_online %}
+            <div class="alert alert-error">
+                <strong>Bot is offline.</strong> Check that:
+                <ul>
+                    <li>The Discord token is configured correctly in Settings.</li>
+                    <li>The bot has permission to join and speak in the target voice channel.</li>
+                    <li>The application was restarted after token or KLIPY changes.</li>
+                </ul>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <strong>Bot is online.</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

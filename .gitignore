@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+.venv
+venv/
+*.db
+*.sqlite
+.DS_Store
+bot.log
+temp/
+archives/
+music_state.json
+music_history.json
+music_commands.json
+servers.json

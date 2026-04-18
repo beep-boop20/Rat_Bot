@@ -1,0 +1,11 @@
+discord.py[voice]>=2.7.1
+python-dotenv
+sqlalchemy
+aiosqlite
+fastapi
+uvicorn
+jinja2
+python-multipart
+psutil
+aiofiles
+yt-dlp

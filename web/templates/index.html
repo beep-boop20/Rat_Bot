@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block header %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-page">
+    {% if current_server %}
+    <div class="dashboard-hero">
+        <div class="glass-card now-playing-card featured">
+            <h3>Now Playing</h3>
+            {% if music_state.get('is_playing') and music_state.get('current_track') %}
+            <div class="now-playing-info large">
+                {% if music_state.get('thumbnail') %}
+                <img src="{{ music_state.thumbnail }}" alt="Album art" class="now-playing-thumb large">
+                {% else %}
+                <div class="now-playing-thumb large placeholder-thumb">Music</div>
+                {% endif %}
+                <div class="now-playing-details">
+                    <p class="song-title large">{{ music_state.current_track }}</p>
+                    <p class="song-status">Playing right now on {{ current_server.name }}</p>
+                    {% if music_state.get('query') %}
+                    <p class="song-query">{{ music_state.query }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <p class="empty-state">Nothing is playing for this server yet. Open the music page to start playback.</p>
+            {% endif %}
+            <a href="/music?server_id={{ current_server.id }}" class="card-link">Open Music Player</a>
+        </div>
+
+        <div class="glass-card stats-card featured">
+            <h3>Stats</h3>
+            <div class="stat-items featured">
+                <div class="stat-item">
+                    <span class="stat-value">{{ songs_24h }}</span>
+                    <span class="stat-label">Songs in 24h</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">{{ music_state.get('queue', [])|length }}</span>
+                    <span class="stat-label">Queued</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">
+                        {% if bot_status %}
+                        <span style="color: var(--status-online);">Online</span>
+                        {% else %}
+                        <span style="color: var(--status-dnd);">Offline</span>
+                        {% endif %}
+                    </span>
+                    <span class="stat-label">Bot Status</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card full-width">
+        <h3>Recently Played</h3>
+        {% if recent_songs %}
+        <div class="recent-songs-list">
+            {% for song in recent_songs %}
+            <div class="recent-song-item">
+                {% if song.thumbnail_url %}
+                <img src="{{ song.thumbnail_url }}" alt="" class="recent-song-thumb">
+                {% else %}
+                <div class="recent-song-thumb placeholder-thumb">Music</div>
+                {% endif %}
+                <div class="recent-song-info">
+                    <span class="recent-song-title">{{ song.song_title }}</span>
+                    <span class="recent-song-meta">{{ song.username }} - <span
+                            data-timestamp="{{ song.timestamp.isoformat() }}Z">{{ song.timestamp.strftime('%H:%M')
+                            }}</span></span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-state">No songs played for this server yet.</p>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="glass-card">
+        <h3>No Server Selected</h3>
+        <p class="empty-state">Add a server in settings or pick one from the server switcher to start using the dashboard.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

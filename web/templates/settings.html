@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block header %}Settings{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    {% if error_message %}
+    <div class="settings-alert error">{{ error_message }}</div>
+    {% endif %}
+
+    {% if saved and restart_required %}
+    <div class="settings-alert warning">
+        Settings saved. Restart the application to apply the updated bot token or KLIPY key.
+    </div>
+    {% elif saved %}
+    <div class="settings-alert success">Changes saved.</div>
+    {% endif %}
+
+    <div class="settings-grid">
+        <section class="settings-card">
+            <div class="settings-card-header">
+                <h3>Server Management</h3>
+                <p>Use only the server ID. The app will infer the name whenever it can.</p>
+            </div>
+
+            <form method="post" action="/settings/server/add" class="settings-form inline">
+                <input type="text" name="guild_id" placeholder="Discord server ID" required>
+                <button type="submit" class="btn-solid">Add Server</button>
+            </form>
+
+            {% if servers %}
+            <div class="server-card-list">
+                {% for server in servers %}
+                <div class="server-card {% if current_server and current_server.id == server.id %}active{% endif %}">
+                    <div class="server-card-main">
+                        {% if server.icon_url %}
+                        <img src="{{ server.icon_url }}" alt="" class="server-avatar">
+                        {% else %}
+                        <div class="server-avatar fallback">{{ server.name[:1] }}</div>
+                        {% endif %}
+
+                        <div class="server-meta">
+                            <div class="server-name-row">
+                                <span class="server-name" title="{{ server.name }}">{{ server.name }}</span>
+                                {% if current_server and current_server.id == server.id %}
+                                <span class="badge badge-success">Active</span>
+                                {% endif %}
+                            </div>
+                            <span class="server-id">ID: {{ server.id }}</span>
+                        </div>
+                    </div>
+
+                    <div class="server-card-actions">
+                        <button type="button" class="btn-ghost"
+                            onclick="switchServerContext('{{ server.id }}')">Open</button>
+                        <form method="post" action="/settings/server/remove"
+                            onsubmit="return confirm('Remove this server from the dashboard list?');">
+                            <input type="hidden" name="guild_id" value="{{ server.id }}">
+                            <button type="submit" class="btn-danger">Remove</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="empty-state">No servers tracked yet.</p>
+            {% endif %}
+        </section>
+
+        <section class="settings-card">
+            <div class="settings-card-header">
+                <h3>Bot Configuration</h3>
+                <p>Changing either of these values requires a restart.</p>
+            </div>
+
+            <form method="post" action="/settings" class="settings-form">
+                {% if current_server %}
+                <input type="hidden" name="server_id" value="{{ current_server.id }}">
+                {% endif %}
+
+                <label class="settings-label" for="tokenInput">Discord Bot Token</label>
+                <div class="password-input">
+                    <input type="password" id="tokenInput" name="token" value="{{ token }}" autocomplete="off">
+                    <button type="button" class="btn-inline" onclick="toggleToken(this)">Show</button>
+                </div>
+                <p class="settings-help">
+                    Get this from the <a href="https://discord.com/developers/applications" target="_blank">Discord
+                        Developer Portal</a>.
+                </p>
+
+                <label class="settings-label" for="klipyKeyInput">KLIPY API Key</label>
+                <div class="password-input">
+                    <input type="password" id="klipyKeyInput" name="klipy_key" value="{{ klipy_key }}"
+                        placeholder="Optional" autocomplete="off">
+                    <button type="button" class="btn-inline" onclick="toggleKlipy(this)">Show</button>
+                </div>
+                <p class="settings-help">
+                    Used for the <code>/rat</code> command and KLIPY GIF search requests.
+                </p>
+
+                <div class="settings-actions">
+                    <button type="submit" class="btn-solid">Save Changes</button>
+                    {% if restart_required %}
+                    <button type="button" class="btn-ghost" onclick="performSystemAction('restart')">Restart
+                        Now</button>
+                    {% endif %}
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <section class="settings-card system-card">
+        <div class="settings-card-header">
+            <h3>System</h3>
+            <p>Use restart after token or API key changes. Server add, switch, and remove actions apply immediately.</p>
+        </div>
+
+        <div class="settings-actions">
+            <button type="button" class="btn-solid" onclick="performSystemAction('restart')">Restart
+                Application</button>
+        </div>
+    </section>
+</div>
+
+<script>
+    function toggleSensitiveInput(inputId, trigger) {
+        const input = document.getElementById(inputId);
+        if (!input) {
+            return;
+        }
+        const reveal = input.type === 'password';
+        input.type = reveal ? 'text' : 'password';
+        if (trigger) {
+            trigger.textContent = reveal ? 'Hide' : 'Show';
+        }
+    }
+
+    function toggleToken(trigger) {
+        toggleSensitiveInput('tokenInput', trigger);
+    }
+
+    function toggleKlipy(trigger) {
+        toggleSensitiveInput('klipyKeyInput', trigger);
+    }
+</script>
+{% endblock %}

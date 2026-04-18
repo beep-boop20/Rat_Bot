@@ -1,0 +1,1340 @@
+{% extends "base.html" %}
+
+{% block header %}Music{% endblock %}
+
+{% block content %}
+{% if current_server %}
+<div class="music-dashboard">
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-info">
+                <div class="stat-value" id="queueCount">0</div>
+                <div class="stat-label">In Queue</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-info">
+                <div class="stat-value" id="historyCount">0</div>
+                <div class="stat-label">Played in 24h</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-info">
+                <div class="stat-value" id="uptimeValue">--:--</div>
+                <div class="stat-label">Uptime</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="music-grid">
+        <section class="music-card player-card">
+            <div class="music-card-header">
+                <h2>Now Playing</h2>
+                <span class="status-badge {% if music_state.is_playing %}status-online{% elif music_state.is_paused %}status-paused{% else %}status-idle{% endif %}"
+                    id="statusBadge">
+                    {% if music_state.is_playing %}Playing{% elif music_state.is_paused %}Paused{% else %}Idle{% endif %}
+                </span>
+            </div>
+
+            <div id="errorMessage" class="error-banner hidden"></div>
+
+            <div class="player-body" id="nowPlayingContent">
+                {% if music_state.current_track %}
+                <div class="player-art">
+                    {% if music_state.thumbnail %}
+                    <img src="{{ music_state.thumbnail }}" alt="Album art">
+                    {% else %}
+                    <div class="player-art-fallback">Music</div>
+                    {% endif %}
+                </div>
+                <div class="player-meta">
+                    <h3 class="track-title">{{ music_state.current_track }}</h3>
+                    {% if music_state.query %}
+                    <p class="track-query">
+                        {% if music_state.query.startswith('http://') or music_state.query.startswith('https://') %}
+                        <a href="{{ music_state.query }}" target="_blank" rel="noopener noreferrer">{{ music_state.query }}</a>
+                        {% else %}
+                        {{ music_state.query }}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                    <div class="progress-block">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"
+                                style="width: {{ music_state.progress or 0 }}%;"></div>
+                        </div>
+                        <div class="time-display">
+                            <span id="currentTime">0:00</span>
+                            <span id="totalTime">0:00</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state tall">No music playing for this server.</div>
+                {% endif %}
+            </div>
+
+            <div class="controls-block">
+                <div class="search-row">
+                    <input type="text" id="searchInput" class="search-input"
+                        placeholder="Search YouTube or paste a URL">
+                    <button id="searchActionBtn" class="btn-solid search-action-btn" onclick="playMusic()">
+                        {% if music_state.is_playing or music_state.is_paused %}Queue{% else %}Play{% endif %}
+                    </button>
+                </div>
+
+                <div class="actions-grid">
+                    <button class="btn-ghost" id="pauseBtn" onclick="sendCommand('pause')">Pause</button>
+                    <button class="btn-ghost" id="resumeBtn" onclick="sendCommand('resume')">Resume</button>
+                    <button class="btn-ghost" onclick="sendCommand('skip')">Skip</button>
+                    <button class="btn-ghost" onclick="sendCommand('stop')">Stop</button>
+                    <button class="btn-ghost" onclick="sendCommand('shuffle')">Shuffle</button>
+                    <button class="btn-danger" onclick="sendCommand('clear')">Clear Queue</button>
+                </div>
+
+                <div class="upload-row">
+                    <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.m4a" class="hidden"
+                        onchange="handleFileUpload(this)">
+                    <button class="btn-ghost wide" onclick="document.getElementById('fileInput').click()">Play Local
+                        File</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="music-card queue-card">
+            <div class="music-card-header">
+                <h2>Queue</h2>
+                <span class="badge" id="queueBadge">{{ music_state.queue|length }} songs</span>
+            </div>
+            <div class="list-panel" id="queueItems">
+                {% if music_state.queue %}
+                {% for song in music_state.queue %}
+                <div class="list-item clickable" onclick="skipTo({{ loop.index - 1 }})">
+                    <span class="list-index">{{ loop.index }}</span>
+                    <div class="thumb-shell">
+                        {% if song.thumbnail %}
+                        <img src="{{ song.thumbnail }}" alt="">
+                        {% else %}
+                        <span>Music</span>
+                        {% endif %}
+                    </div>
+                    <span class="list-title">{{ song.title }}</span>
+                    <button class="icon-btn" onclick="event.stopPropagation(); removeFromQueue({{ loop.index - 1 }})">
+                        Remove
+                    </button>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">Queue is empty.</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="music-card history-card">
+            <div class="music-card-header">
+                <h2>Recently Played</h2>
+                <span class="badge" id="historyBadge">0 songs</span>
+            </div>
+            <div class="list-panel history-panel" id="historyItems">
+                <div class="empty-state">No history yet.</div>
+            </div>
+        </section>
+    </div>
+</div>
+<div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+{% else %}
+<div class="glass-card">
+    <h3>No Server Selected</h3>
+    <p class="empty-state">Choose a server from the switcher or add one in settings.</p>
+</div>
+{% endif %}
+
+<style>
+    .music-dashboard {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .stats-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-tertiary) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        padding: 20px;
+    }
+
+    .music-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        gap: 20px;
+        align-items: stretch;
+    }
+
+    .music-card {
+        background: var(--background-secondary);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        overflow: hidden;
+        min-width: 0;
+    }
+
+    .player-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .queue-card,
+    .history-card {
+        min-height: 420px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .queue-card {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .history-card {
+        grid-column: 2;
+    }
+
+    .music-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 22px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        gap: 16px;
+    }
+
+    .music-card-header h2 {
+        font-size: 1.2rem;
+        color: var(--header-primary);
+    }
+
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .status-badge.status-online {
+        background: rgba(67, 181, 129, 0.16);
+        color: var(--status-online);
+    }
+
+    .status-badge.status-idle {
+        background: rgba(250, 166, 26, 0.16);
+        color: var(--status-idle);
+    }
+
+    .status-badge.status-paused {
+        background: rgba(250, 166, 26, 0.2);
+        color: var(--status-idle);
+    }
+
+    .error-banner {
+        margin: 18px 22px 0;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(240, 71, 71, 0.14);
+        border: 1px solid rgba(240, 71, 71, 0.25);
+        color: #ffb0b0;
+    }
+
+    .player-body {
+        padding: 24px 22px;
+        min-height: 470px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+    }
+
+    .player-art {
+        width: min(100%, 320px);
+        aspect-ratio: 1;
+        margin: 0 auto 20px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: var(--background-tertiary);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    }
+
+    .player-art img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .player-art-fallback {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        color: var(--text-muted);
+    }
+
+    .player-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .track-title {
+        font-size: 1.5rem;
+        text-align: center;
+        color: var(--header-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .track-query {
+        text-align: center;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-bottom: 4px;
+    }
+
+    .track-query a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .track-query a:hover {
+        text-decoration: underline;
+    }
+
+    .progress-block {
+        margin-top: 6px;
+    }
+
+    .progress-bar {
+        height: 10px;
+        border-radius: 999px;
+        background: var(--background-tertiary);
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #2d7a4f 0%, #49a56d 100%);
+        transition: width 0.35s linear;
+    }
+
+    .time-display {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .controls-block {
+        padding: 0 22px 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .search-row,
+    .upload-row {
+        display: flex;
+        gap: 12px;
+    }
+
+    .search-row {
+        align-items: stretch;
+    }
+
+    .search-input {
+        flex: 1;
+        min-width: 0;
+        height: 48px;
+        padding: 0 15px;
+        background: var(--background-tertiary);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        color: var(--text-normal);
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: rgba(88, 101, 242, 0.55);
+    }
+
+    .search-action-btn {
+        width: 132px;
+        min-width: 132px;
+        height: 48px;
+        padding: 0 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #2f9e5a;
+        border: 1px solid rgba(67, 181, 129, 0.5);
+    }
+
+    .search-action-btn:hover {
+        background: #298b4f;
+    }
+
+    .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .wide {
+        width: 100%;
+    }
+
+    .btn-ghost:disabled,
+    .btn-solid:disabled,
+    .btn-danger:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .list-panel {
+        max-height: 460px;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+    }
+
+    .queue-card .list-panel {
+        flex: 1;
+        max-height: none;
+    }
+
+    .history-panel {
+        max-height: 620px;
+        gap: 8px;
+    }
+
+    .list-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: var(--background-tertiary);
+        border-radius: 12px;
+        min-width: 0;
+    }
+
+    .list-item.clickable {
+        cursor: pointer;
+    }
+
+    .list-item.clickable:hover {
+        background: var(--background-modifier-hover);
+    }
+
+    .list-item.dragging {
+        opacity: 0.7;
+        border: 1px dashed rgba(114, 137, 218, 0.65);
+        background: rgba(114, 137, 218, 0.1);
+    }
+
+    .list-item.drag-target {
+        border: 1px solid rgba(67, 181, 129, 0.6);
+        box-shadow: 0 0 0 1px rgba(67, 181, 129, 0.25) inset;
+    }
+
+    .list-index {
+        width: 28px;
+        color: var(--text-muted);
+        font-family: monospace;
+        font-weight: 700;
+    }
+
+    .thumb-shell {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--background-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+
+    .thumb-shell img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .list-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .icon-btn {
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 6px 8px;
+        border-radius: 8px;
+    }
+
+    .icon-btn:hover {
+        background: rgba(240, 71, 71, 0.12);
+        border-color: rgba(240, 71, 71, 0.35);
+        color: var(--status-dnd);
+    }
+
+    .history-entry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+    }
+
+    .history-stack {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .history-main {
+        display: block;
+        min-width: 0;
+    }
+
+    .history-main .list-title {
+        font-size: 0.95rem;
+    }
+
+    .history-meta-row,
+    .history-sub-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        flex-wrap: nowrap;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+    }
+
+    .history-sub-row {
+        font-size: 0.74rem;
+    }
+
+    .history-dot {
+        opacity: 0.55;
+    }
+
+    .history-date,
+    .history-length {
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .history-query {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .history-user {
+        max-width: 35%;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .empty-state.tall {
+        min-height: 422px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 18px 22px;
+    }
+
+    .loading-state {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loading-text {
+        color: var(--text-muted);
+        text-align: center;
+    }
+
+    .toast-container {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 1200;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+    }
+
+    .toast {
+        min-width: 220px;
+        max-width: min(360px, calc(100vw - 32px));
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(67, 181, 129, 0.45);
+        background: rgba(23, 31, 26, 0.94);
+        color: #d8f5e3;
+        font-size: 0.86rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+        transform: translateY(10px) scale(0.98);
+        opacity: 0;
+        animation: toast-in 160ms ease-out forwards, toast-out 220ms ease-in forwards 2200ms;
+    }
+
+    .toast.info {
+        border-color: rgba(114, 137, 218, 0.5);
+        color: #d9e1ff;
+        background: rgba(22, 26, 41, 0.94);
+    }
+
+    .toast.error {
+        border-color: rgba(240, 71, 71, 0.55);
+        color: #ffd8d8;
+        background: rgba(45, 23, 23, 0.94);
+    }
+
+    @keyframes toast-in {
+        from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.98);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    @keyframes toast-out {
+        from {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        to {
+            opacity: 0;
+            transform: translateY(8px) scale(0.985);
+        }
+    }
+
+    @media (max-width: 1100px) {
+        .music-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .history-card {
+            grid-column: auto;
+        }
+    }
+
+    @media (max-width: 720px) {
+        .music-dashboard {
+            padding: 16px;
+        }
+
+        .search-row,
+        .upload-row {
+            flex-direction: column;
+        }
+
+        .search-action-btn {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .actions-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .track-title {
+            font-size: 1.2rem;
+        }
+
+        .player-body {
+            min-height: 410px;
+        }
+
+        .empty-state.tall {
+            min-height: 360px;
+        }
+
+        .toast-container {
+            left: 12px;
+            right: 12px;
+            bottom: 12px;
+        }
+
+        .toast {
+            max-width: 100%;
+            min-width: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if current_server %}
+<script>
+    const serverId = {{ current_server.id }};
+    let currentState = null;
+    let lastUpdate = Date.now();
+    let lastStateVersion = 0;
+    let lastHistoryVersion = -1;
+    const pendingCommands = new Set();
+    let toastCounter = 0;
+    let draggedQueueIndex = null;
+    let queueDragGuardUntil = 0;
+
+    function apiUrl(path) {
+        const url = new URL(path, window.location.origin);
+        url.searchParams.set('server_id', String(serverId));
+        return url;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    function renderTrackQueryHtml(songUrl) {
+        if (!songUrl) {
+            return '';
+        }
+        const safeText = escapeHtml(songUrl);
+        const isHttpLink = /^https?:\/\//i.test(String(songUrl));
+        if (isHttpLink) {
+            return `<p class="track-query"><a href="${safeText}" target="_blank" rel="noopener noreferrer">${safeText}</a></p>`;
+        }
+        return `<p class="track-query">${safeText}</p>`;
+    }
+
+    function showToast(message, kind = 'success') {
+        if (!message) {
+            return;
+        }
+        const container = document.getElementById('toastContainer');
+        if (!container) {
+            return;
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${kind}`;
+        toast.dataset.toastId = String(++toastCounter);
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        toast.addEventListener('animationend', (event) => {
+            if (event.animationName === 'toast-out') {
+                toast.remove();
+            }
+        });
+
+        setTimeout(() => toast.remove(), 3200);
+    }
+
+    function getCommandToast(type, query) {
+        const index = Number.parseInt(query, 10);
+        const indexLabel = Number.isFinite(index) ? `#${index + 1}` : 'selected track';
+        if (type === 'play') {
+            const hasActivePlayback = Boolean(currentState && (currentState.is_playing || currentState.is_paused));
+            return hasActivePlayback ? 'Added to queue' : 'Play requested';
+        }
+        if (type === 'play_file') {
+            const hasActivePlayback = Boolean(currentState && (currentState.is_playing || currentState.is_paused));
+            return hasActivePlayback ? 'Local track added to queue' : 'Local track play requested';
+        }
+        if (type === 'pause') return 'Pause requested';
+        if (type === 'resume') return 'Resume requested';
+        if (type === 'skip') return 'Skip requested';
+        if (type === 'stop') return 'Stop requested';
+        if (type === 'shuffle') return 'Queue shuffled';
+        if (type === 'clear') return 'Queue cleared';
+        if (type === 'remove') return `Removed ${indexLabel}`;
+        if (type === 'move') return 'Queue order updated';
+        if (type === 'skipto') return `Jumping to ${indexLabel}`;
+        return 'Action completed';
+    }
+
+    function formatTime(seconds) {
+        if (!seconds || seconds < 0) {
+            return '0:00';
+        }
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function formatSongLength(seconds) {
+        if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) {
+            return 'Unknown length';
+        }
+        const whole = Math.max(0, Math.floor(Number(seconds)));
+        const hours = Math.floor(whole / 3600);
+        const minutes = Math.floor((whole % 3600) / 60);
+        const secs = whole % 60;
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function parseTimestamp(timestamp) {
+        if (!timestamp) {
+            return null;
+        }
+        if (typeof timestamp === 'string' && !timestamp.endsWith('Z')) {
+            return new Date(`${timestamp}Z`);
+        }
+        return new Date(timestamp);
+    }
+
+    function formatUptime(totalSeconds) {
+        if (!totalSeconds || totalSeconds < 0) {
+            return '--:--';
+        }
+
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m`;
+        }
+        return `${hours}h ${minutes}m`;
+    }
+
+    function formatTimeAgo(timestamp) {
+        if (!timestamp) {
+            return 'Unknown';
+        }
+
+        const then = parseTimestamp(timestamp);
+        if (!then || Number.isNaN(then.getTime())) {
+            return 'Unknown';
+        }
+        const diffSeconds = Math.floor((Date.now() - then.getTime()) / 1000);
+        if (diffSeconds < 60) {
+            return 'Just now';
+        }
+        if (diffSeconds < 3600) {
+            return `${Math.floor(diffSeconds / 60)}m ago`;
+        }
+        if (diffSeconds < 86400) {
+            return `${Math.floor(diffSeconds / 3600)}h ago`;
+        }
+        return `${Math.floor(diffSeconds / 86400)}d ago`;
+    }
+
+    function formatAbsoluteDate(timestamp) {
+        if (!timestamp) {
+            return 'Unknown date';
+        }
+        const date = parseTimestamp(timestamp);
+        if (!date || Number.isNaN(date.getTime())) {
+            return 'Unknown date';
+        }
+        return date.toLocaleString([], {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function updateProgress() {
+        if (!currentState || !currentState.is_playing) {
+            return;
+        }
+
+        const duration = currentState.duration || 0;
+        const elapsed = (currentState.elapsed || 0) + ((Date.now() - lastUpdate) / 1000);
+        const clampedElapsed = duration > 0 ? Math.min(duration, elapsed) : elapsed;
+        const progress = duration > 0 ? (clampedElapsed / duration) * 100 : 0;
+
+        const progressFill = document.getElementById('progressFill');
+        const currentTime = document.getElementById('currentTime');
+        const totalTime = document.getElementById('totalTime');
+
+        if (progressFill) {
+            progressFill.style.width = `${progress}%`;
+        }
+        if (currentTime) {
+            currentTime.textContent = formatTime(clampedElapsed);
+        }
+        if (totalTime) {
+            totalTime.textContent = formatTime(duration);
+        }
+    }
+
+    function updateQueue(state) {
+        const queueItems = document.getElementById('queueItems');
+        const queueBadge = document.getElementById('queueBadge');
+        const queueCount = document.getElementById('queueCount');
+        const queue = state.queue || [];
+
+        if (!queue.length) {
+            queueItems.innerHTML = '<div class="empty-state">Queue is empty.</div>';
+            queueBadge.textContent = '0 songs';
+            queueCount.textContent = '0';
+            return;
+        }
+
+        queueItems.innerHTML = queue.map((song, index) => `
+            <div
+                class="list-item clickable"
+                draggable="true"
+                data-queue-index="${index}"
+                onclick="handleQueueItemClick(${index})"
+                ondragstart="handleQueueDragStart(event, ${index})"
+                ondragover="handleQueueDragOver(event, ${index})"
+                ondragleave="handleQueueDragLeave(event)"
+                ondrop="handleQueueDrop(event, ${index})"
+                ondragend="handleQueueDragEnd(event)"
+                title="Click to jump to this track. Drag to reorder."
+            >
+                <span class="list-index">${index + 1}</span>
+                <div class="thumb-shell">
+                    ${song.thumbnail ? `<img src="${escapeHtml(song.thumbnail)}" alt="">` : '<span>Music</span>'}
+                </div>
+                <span class="list-title">${escapeHtml(song.title || 'Pending track')}</span>
+                <button class="icon-btn" onclick="event.stopPropagation(); removeFromQueue(${index})">Remove</button>
+            </div>
+        `).join('');
+        queueBadge.textContent = `${queue.length} songs`;
+        queueCount.textContent = String(queue.length);
+    }
+
+    function updateNowPlaying(state) {
+        const badge = document.getElementById('statusBadge');
+        const errorMessage = document.getElementById('errorMessage');
+        const container = document.getElementById('nowPlayingContent');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const searchActionBtn = document.getElementById('searchActionBtn');
+
+        let badgeClass = 'status-idle';
+        let badgeText = 'Idle';
+        if (state.is_playing) {
+            badgeClass = 'status-online';
+            badgeText = 'Playing';
+        } else if (state.is_paused) {
+            badgeClass = 'status-paused';
+            badgeText = 'Paused';
+        }
+
+        badge.className = `status-badge ${badgeClass}`;
+        badge.textContent = badgeText;
+        if (pauseBtn) {
+            pauseBtn.disabled = !state.is_playing;
+        }
+        if (resumeBtn) {
+            resumeBtn.disabled = !state.is_paused;
+        }
+        if (searchActionBtn) {
+            searchActionBtn.textContent = (state.is_playing || state.is_paused) ? 'Queue' : 'Play';
+        }
+
+        if (state.error) {
+            errorMessage.textContent = state.error;
+            errorMessage.classList.remove('hidden');
+        } else {
+            errorMessage.classList.add('hidden');
+        }
+
+        if (!state.current_track) {
+            const pendingCount = (state.queue || []).length;
+            if (pendingCount > 0) {
+                container.innerHTML = `
+                    <div class="loading-state">
+                        <div class="player-art">
+                            <div class="player-art-fallback">Music</div>
+                        </div>
+                        <div class="player-meta">
+                            <h3 class="track-title">Loading Next Track...</h3>
+                            <p class="loading-text">Queue has ${pendingCount} song${pendingCount === 1 ? '' : 's'} pending.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = '<div class="empty-state tall">No music playing for this server.</div>';
+            return;
+        }
+
+        const imageHtml = state.thumbnail
+            ? `<img src="${escapeHtml(state.thumbnail)}" alt="Album art">`
+            : '<div class="player-art-fallback">Music</div>';
+
+        const queryHtml = renderTrackQueryHtml(state.query);
+
+        container.innerHTML = `
+            <div class="player-art">${imageHtml}</div>
+            <div class="player-meta">
+                <h3 class="track-title">${escapeHtml(state.current_track)}</h3>
+                ${queryHtml}
+                <div class="progress-block">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill" style="width: ${state.progress || 0}%;"></div>
+                    </div>
+                    <div class="time-display">
+                        <span id="currentTime">${formatTime(state.elapsed || 0)}</span>
+                        <span id="totalTime">${formatTime(state.duration || 0)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function updateState() {
+        try {
+            const response = await fetch(apiUrl('/api/music/state'));
+            const state = await response.json();
+            currentState = state;
+            lastUpdate = Date.now();
+
+            updateNowPlaying(state);
+            updateQueue(state);
+
+            if (state.session_start) {
+                const diff = Math.max(0, Math.floor((Date.now() - (state.session_start * 1000)) / 1000));
+                document.getElementById('uptimeValue').textContent = formatUptime(diff);
+            } else {
+                document.getElementById('uptimeValue').textContent = '--:--';
+            }
+
+            if (state.last_update && state.last_update > lastStateVersion) {
+                lastStateVersion = state.last_update;
+            }
+
+            const historyVersion = Number(state.history_version ?? -1);
+            if (!Number.isNaN(historyVersion) && historyVersion >= 0 && historyVersion !== lastHistoryVersion) {
+                lastHistoryVersion = historyVersion;
+                loadHistory();
+            }
+        } catch (error) {
+            console.error('Failed to fetch music state:', error);
+        }
+    }
+
+    async function loadHistory() {
+        try {
+            const [historyResponse, statsResponse] = await Promise.all([
+                fetch(apiUrl('/api/music/history')),
+                fetch(apiUrl('/api/music/stats'))
+            ]);
+            const history = await historyResponse.json();
+            const stats = await statsResponse.json();
+
+            const historyItems = document.getElementById('historyItems');
+            const historyBadge = document.getElementById('historyBadge');
+            const historyCount = document.getElementById('historyCount');
+
+            historyCount.textContent = String(stats.total_played_24h || 0);
+
+            if (!history.length) {
+                historyItems.innerHTML = '<div class="empty-state">No history yet.</div>';
+                historyBadge.textContent = '0 songs';
+                return;
+            }
+
+            historyItems.innerHTML = history.slice(0, 40).map(entry => {
+                const isStableYoutubeUrl = Boolean(
+                    entry.song_url && /(?:youtube\.com\/watch|youtu\.be\/)/i.test(entry.song_url)
+                );
+                const replayQuery = entry.source_type === 'local'
+                    ? (entry.song_url || entry.song_query || '')
+                    : (isStableYoutubeUrl ? entry.song_url : (entry.song_query || entry.song_url || ''));
+                const replayPayload = entry.source_type === 'local'
+                    ? {
+                        type: 'play_file',
+                        query: replayQuery,
+                        history_data: {
+                            song_title: entry.song_title,
+                            song_url: entry.song_url,
+                            song_query: entry.song_query,
+                            thumbnail_url: entry.thumbnail_url,
+                            song_duration: entry.song_duration,
+                            source_type: entry.source_type,
+                        },
+                    }
+                    : {
+                        type: 'play',
+                        query: replayQuery,
+                        history_data: {
+                            song_title: entry.song_title,
+                            song_url: entry.song_url,
+                            song_query: entry.song_query,
+                            thumbnail_url: entry.thumbnail_url,
+                            song_duration: entry.song_duration,
+                            source_type: entry.source_type,
+                        },
+                    };
+                const replayPayloadEncoded = encodeURIComponent(JSON.stringify(replayPayload));
+                const exactTime = formatAbsoluteDate(entry.timestamp);
+                const relativeTime = formatTimeAgo(entry.timestamp);
+                const songLength = formatSongLength(entry.song_duration);
+                const queryText = entry.song_query || (entry.source_type === 'local' ? 'Local file' : 'Direct URL');
+                return `
+                    <div class="list-item clickable history-entry" title="${escapeHtml(exactTime)}" onclick="playHistoryFromEncoded('${replayPayloadEncoded}')">
+                        <div class="thumb-shell">
+                            ${entry.thumbnail_url ? `<img src="${escapeHtml(entry.thumbnail_url)}" alt="">` : '<span>Music</span>'}
+                        </div>
+                        <div class="history-stack">
+                            <div class="history-main">
+                                <span class="list-title">${escapeHtml(entry.song_title)}</span>
+                            </div>
+                            <div class="history-meta-row">
+                                <span class="history-user">${escapeHtml(entry.username || 'Unknown user')}</span>
+                                <span class="history-dot">&middot;</span>
+                                <span>${escapeHtml(relativeTime)}</span>
+                                <span class="history-dot">&middot;</span>
+                                <span class="history-length">${escapeHtml(songLength)}</span>
+                            </div>
+                            <div class="history-sub-row">
+                                <span class="history-date">${escapeHtml(exactTime)}</span>
+                                <span class="history-dot">&middot;</span>
+                                <span class="history-query" title="${escapeHtml(queryText)}">Q: ${escapeHtml(queryText)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            historyBadge.textContent = `${history.length} songs`;
+        } catch (error) {
+            console.error('Failed to fetch history:', error);
+        }
+    }
+
+    async function sendCommand(type, query = null, extras = {}) {
+        const key = `${type}:${query ?? ''}`;
+        if (pendingCommands.has(key)) {
+            showToast('Action already queued. Please wait a moment.', 'info');
+            return;
+        }
+
+        pendingCommands.add(key);
+        try {
+            const response = await fetch('/api/music/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ server_id: serverId, type, query, ...extras })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Command failed with status ${response.status}`);
+            }
+
+            showToast(getCommandToast(type, query), 'success');
+            updateState();
+            setTimeout(updateState, 80);
+        } catch (error) {
+            console.error('Music command failed:', error);
+            showToast('Action failed. Try once more.', 'error');
+        } finally {
+            setTimeout(() => pendingCommands.delete(key), 80);
+        }
+    }
+
+    function playMusic() {
+        const searchInput = document.getElementById('searchInput');
+        const query = searchInput.value.trim();
+        if (!query) {
+            return;
+        }
+        sendCommand('play', query);
+        searchInput.value = '';
+    }
+
+    function playHistory(payload) {
+        if (!payload || !payload.query) {
+            return;
+        }
+        sendCommand(payload.type || 'play', payload.query, { history_data: payload.history_data || null });
+    }
+
+    function playHistoryFromEncoded(encodedPayload) {
+        if (!encodedPayload) {
+            return;
+        }
+        try {
+            const payload = JSON.parse(decodeURIComponent(encodedPayload));
+            playHistory(payload);
+        } catch (error) {
+            console.error('Failed to parse history payload:', error);
+        }
+    }
+
+    async function handleFileUpload(input) {
+        if (!input.files || !input.files[0]) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', input.files[0]);
+        formData.append('server_id', String(serverId));
+
+        try {
+            const response = await fetch('/api/music/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.status !== 'success') {
+                throw new Error(result.message || 'Upload failed');
+            }
+            input.value = '';
+            showToast('Local track uploaded and queued', 'success');
+            setTimeout(updateState, 400);
+        } catch (error) {
+            console.error('Upload error:', error);
+            showToast('Upload failed.', 'error');
+        }
+    }
+
+    function removeFromQueue(index) {
+        sendCommand('remove', index);
+    }
+
+    function moveQueueItem(fromIndex, toIndex) {
+        if (fromIndex === toIndex) {
+            return;
+        }
+        sendCommand('move', `${fromIndex}:${toIndex}`);
+    }
+
+    function clearQueueDragStyles() {
+        document.querySelectorAll('#queueItems .list-item').forEach((item) => {
+            item.classList.remove('dragging');
+            item.classList.remove('drag-target');
+        });
+    }
+
+    function handleQueueItemClick(index) {
+        if (Date.now() < queueDragGuardUntil) {
+            return;
+        }
+        skipTo(index);
+    }
+
+    function handleQueueDragStart(event, index) {
+        draggedQueueIndex = index;
+        queueDragGuardUntil = Date.now() + 450;
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            try {
+                event.dataTransfer.setData('text/plain', String(index));
+            } catch (error) {
+                console.debug('Drag payload not set:', error);
+            }
+        }
+        if (event.currentTarget) {
+            event.currentTarget.classList.add('dragging');
+        }
+    }
+
+    function handleQueueDragOver(event, index) {
+        if (draggedQueueIndex === null || draggedQueueIndex === index) {
+            return;
+        }
+        event.preventDefault();
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'move';
+        }
+        if (event.currentTarget) {
+            event.currentTarget.classList.add('drag-target');
+        }
+    }
+
+    function handleQueueDragLeave(event) {
+        if (event.currentTarget) {
+            event.currentTarget.classList.remove('drag-target');
+        }
+    }
+
+    function handleQueueDrop(event, index) {
+        event.preventDefault();
+        if (event.currentTarget) {
+            event.currentTarget.classList.remove('drag-target');
+        }
+        if (draggedQueueIndex === null || draggedQueueIndex === index) {
+            return;
+        }
+        moveQueueItem(draggedQueueIndex, index);
+    }
+
+    function handleQueueDragEnd(event) {
+        if (event.currentTarget) {
+            event.currentTarget.classList.remove('dragging');
+        }
+        clearQueueDragStyles();
+        draggedQueueIndex = null;
+        queueDragGuardUntil = Date.now() + 260;
+    }
+
+    function skipTo(index) {
+        sendCommand('skipto', index);
+    }
+
+    document.getElementById('searchInput').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            playMusic();
+        }
+    });
+
+    updateState();
+    loadHistory();
+    setInterval(updateState, 250);
+    setInterval(updateProgress, 150);
+    setInterval(loadHistory, 30000);
+</script>
+{% endif %}
+{% endblock %}
