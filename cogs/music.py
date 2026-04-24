@@ -13,7 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import KLIPY_API_KEY
-from services.music.ipc import delete_music_command, iter_music_commands
+from services.music.ipc import iter_music_commands
 from services.music.player import MusicPlayer
 from services.music.source import LocalFileSource, YTDLSource
 
@@ -255,7 +255,7 @@ class Music(commands.Cog):
         while not self.bot.is_closed():
             processed_any = False
             try:
-                for command_path, command in iter_music_commands():
+                for command in iter_music_commands():
                     processed_any = True
                     try:
                         await self._handle_web_command(command)
@@ -265,8 +265,6 @@ class Music(commands.Cog):
                             exc,
                             exc_info=(type(exc), exc, exc.__traceback__),
                         )
-                    finally:
-                        delete_music_command(command_path)
             except Exception as exc:
                 self.logger.error(
                     "Web command check error: %s",

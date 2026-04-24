@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import importlib.util
 import logging
 
 import discord
@@ -23,26 +22,6 @@ logger = logging.getLogger("bot_service")
 logging.getLogger("discord.player").setLevel(logging.WARNING)
 
 intents = discord.Intents.default()
-
-
-def validate_voice_runtime() -> bool:
-    version_info = getattr(discord, "version_info", (0, 0, 0))
-    if tuple(version_info) < (2, 7, 0):
-        logger.error(
-            "discord.py %s is too old for Discord voice E2EE (4017). "
-            "Install discord.py[voice]>=2.7.1.",
-            discord.__version__,
-        )
-        return False
-
-    if importlib.util.find_spec("davey") is None:
-        logger.error(
-            "davey is not installed. Discord voice now requires DAVE support. "
-            "Install discord.py[voice]>=2.7.1.",
-        )
-        return False
-
-    return True
 
 
 class TheRatBot(commands.Bot):
@@ -119,9 +98,6 @@ class TheRatBot(commands.Bot):
 async def main():
     if not DISCORD_TOKEN:
         logger.error("DISCORD_TOKEN not found. Please configure it in settings or .env.")
-        return
-
-    if not validate_voice_runtime():
         return
 
     bot = TheRatBot()

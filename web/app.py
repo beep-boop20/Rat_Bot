@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import signal
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Optional
@@ -17,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
 from database import MusicHistory, SystemStatus, db_manager
+from services.control_ipc import request_control_action
 from services.music.ipc import default_music_state, enqueue_music_command, load_music_state
 from server_manager import server_manager
 
@@ -557,27 +557,29 @@ async def remove_server(request: Request):
 
 @app.post("/restart")
 async def restart_app():
-    with open(".restart", "w", encoding="utf-8") as handle:
-        handle.write("restart")
+    if not request_control_action("restart"):
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "Restart request failed: control channel is unavailable.",
+            },
+            status_code=503,
+        )
 
-    async def kill_later():
-        await asyncio.sleep(1)
-        os.kill(os.getpid(), signal.SIGTERM)
-
-    asyncio.create_task(kill_later())
     return JSONResponse({"status": "restarting", "message": "Application is restarting..."})
 
 
 @app.post("/shutdown")
 async def shutdown_app():
-    with open(".shutdown", "w", encoding="utf-8") as handle:
-        handle.write("shutdown")
+    if not request_control_action("shutdown"):
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "Shutdown request failed: control channel is unavailable.",
+            },
+            status_code=503,
+        )
 
-    async def kill_later():
-        await asyncio.sleep(1)
-        os.kill(os.getpid(), signal.SIGTERM)
-
-    asyncio.create_task(kill_later())
     return JSONResponse(
         {
             "status": "shutting_down",

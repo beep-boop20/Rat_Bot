@@ -61,6 +61,13 @@ A Discord music bot with a web dashboard. Play music from YouTube in your voice 
 - FFmpeg (must be in PATH)
 - Discord bot token
 
+## Recent Changes
+
+- Replaced file-based music IPC with in-memory IPC (`multiprocessing.Queue` + shared state dict).
+- Removed restart/shutdown flag files in favor of queue-based supervisor control.
+- Switched restart flow to a non-recursive supervisor loop for cleaner process lifecycle handling.
+- Removed runtime Discord voice version/encryption checks from bot startup; dependency version is enforced by `requirements.txt`.
+
 ## License
 
 MIT

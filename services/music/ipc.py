@@ -1,25 +1,30 @@
 from __future__ import annotations
 
-import json
-import time
-import uuid
-from pathlib import Path
-from typing import Any, Dict, Iterator, Tuple
+import copy
+import queue
+from typing import Any, Dict, Iterator
 
-TEMP_DIR = Path("temp")
-COMMANDS_DIR = TEMP_DIR / "commands"
-STATES_DIR = TEMP_DIR / "states"
-COMMAND_TTL_SECONDS = 10 * 60
+_COMMAND_QUEUE = None
+_STATE_STORE = None
 
 
-def ensure_music_dirs() -> None:
-    COMMANDS_DIR.mkdir(parents=True, exist_ok=True)
-    STATES_DIR.mkdir(parents=True, exist_ok=True)
+def configure_music_ipc(command_queue, state_store) -> None:
+    """Attach shared music IPC primitives for the current process."""
+    global _COMMAND_QUEUE, _STATE_STORE
+    _COMMAND_QUEUE = command_queue
+    _STATE_STORE = state_store
 
 
-def get_state_path(guild_id: int) -> Path:
-    ensure_music_dirs()
-    return STATES_DIR / f"music_state_{guild_id}.json"
+def _require_command_queue():
+    if _COMMAND_QUEUE is None:
+        raise RuntimeError("Music IPC is not configured: command queue is missing.")
+    return _COMMAND_QUEUE
+
+
+def _require_state_store():
+    if _STATE_STORE is None:
+        raise RuntimeError("Music IPC is not configured: state store is missing.")
+    return _STATE_STORE
 
 
 def default_music_state() -> Dict[str, Any]:
@@ -42,84 +47,32 @@ def default_music_state() -> Dict[str, Any]:
 
 
 def load_music_state(guild_id: int) -> Dict[str, Any]:
-    path = get_state_path(guild_id)
-    if not path.exists():
-        return default_music_state()
-
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return default_music_state()
-
-    state = default_music_state()
-    state.update(data)
-    return state
+    state_store = _require_state_store()
+    state = state_store.get(int(guild_id))
+    merged = default_music_state()
+    if isinstance(state, dict):
+        merged.update(copy.deepcopy(state))
+    return merged
 
 
 def save_music_state(guild_id: int, state: Dict[str, Any]) -> None:
-    path = get_state_path(guild_id)
-    payload = json.dumps(state, ensure_ascii=False)
-
-    # On Windows, atomic replace may fail while another process is reading the
-    # destination file. Retry replace first, then fall back to direct write.
-    for attempt in range(3):
-        temp_path = path.with_suffix(f".{time.time_ns()}_{uuid.uuid4().hex}.tmp")
-        try:
-            temp_path.write_text(payload, encoding="utf-8")
-            temp_path.replace(path)
-            return
-        except PermissionError:
-            time.sleep(0.02 * (attempt + 1))
-        finally:
-            try:
-                temp_path.unlink(missing_ok=True)
-            except OSError:
-                pass
-
-    for attempt in range(3):
-        try:
-            path.write_text(payload, encoding="utf-8")
-            return
-        except PermissionError:
-            time.sleep(0.02 * (attempt + 1))
-
-    raise PermissionError(f"Unable to save music state for guild {guild_id}")
+    state_store = _require_state_store()
+    # Store a detached copy so future mutations in caller do not affect shared state.
+    state_store[int(guild_id)] = copy.deepcopy(state)
 
 
 def enqueue_music_command(command: Dict[str, Any]) -> None:
-    ensure_music_dirs()
-    command_path = COMMANDS_DIR / f"{time.time_ns()}_{uuid.uuid4().hex}.json"
-    command_path.write_text(json.dumps(command, ensure_ascii=False), encoding="utf-8")
+    command_queue = _require_command_queue()
+    command_queue.put(copy.deepcopy(command))
 
 
-def _is_stale_command(command_path: Path, now: float) -> bool:
-    try:
-        return (now - command_path.stat().st_mtime) > COMMAND_TTL_SECONDS
-    except OSError:
-        return True
-
-
-def iter_music_commands() -> Iterator[Tuple[Path, Dict[str, Any]]]:
-    ensure_music_dirs()
-    now = time.time()
-    for command_path in sorted(COMMANDS_DIR.glob("*.json")):
-        if _is_stale_command(command_path, now):
-            delete_music_command(command_path)
-            continue
-
+def iter_music_commands() -> Iterator[Dict[str, Any]]:
+    command_queue = _require_command_queue()
+    while True:
         try:
-            with command_path.open("r", encoding="utf-8") as handle:
-                command = json.load(handle)
-        except (OSError, json.JSONDecodeError):
-            delete_music_command(command_path)
-            continue
+            command = command_queue.get_nowait()
+        except queue.Empty:
+            break
 
-        yield command_path, command
-
-
-def delete_music_command(command_path: Path) -> None:
-    try:
-        command_path.unlink(missing_ok=True)
-    except OSError:
-        pass
+        if isinstance(command, dict):
+            yield command
