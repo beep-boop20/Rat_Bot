@@ -13,6 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import KLIPY_API_KEY
+from paths import data_path, env_file_path
 from services.music.ipc import iter_music_commands
 from services.music.player import MusicPlayer
 from services.music.source import LocalFileSource, YTDLSource
@@ -47,14 +48,16 @@ class Music(commands.Cog):
         return sanitized[:120]
 
     def _build_temp_path(self, filename: str) -> Path:
-        os.makedirs("temp", exist_ok=True)
+        temp_dir = data_path("temp")
+        temp_dir.mkdir(parents=True, exist_ok=True)
         safe_name = self._safe_filename(filename)
-        return Path("temp") / f"{int(time.time())}_{uuid.uuid4().hex[:8]}_{safe_name}"
+        return temp_dir / f"{int(time.time())}_{uuid.uuid4().hex[:8]}_{safe_name}"
 
     def _get_klipy_api_key(self) -> str:
-        if os.path.exists(".env"):
+        env_path = env_file_path()
+        if env_path.exists():
             try:
-                with open(".env", "r", encoding="utf-8") as handle:
+                with env_path.open("r", encoding="utf-8") as handle:
                     for raw_line in handle:
                         line = raw_line.strip()
                         if not line or line.startswith("#") or "=" not in line:

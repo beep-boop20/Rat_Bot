@@ -1,0 +1,34 @@
+services:
+  theratbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: theratbot:latest
+    container_name: theratbot
+    restart: unless-stopped
+    environment:
+      RATBOT_DATA_DIR: /app/data
+      TZ: Europe/Warsaw
+    ports:
+      - "127.0.0.1:7734:7734"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:7734/favicon.ico', timeout=5); sys.exit(0 if r.status==204 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+    stop_grace_period: 30s

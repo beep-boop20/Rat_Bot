@@ -8,13 +8,14 @@ from sqlalchemy import select
 
 from config import DISCORD_TOKEN
 from database import SystemStatus, db_manager, init_db
+from paths import data_path
 from server_manager import server_manager
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("bot.log"),
+        logging.FileHandler(data_path("bot.log"), encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )

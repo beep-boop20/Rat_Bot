@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
 from database import MusicHistory, SystemStatus, db_manager
+from paths import env_file_path, data_path, resolve_storage_path
 from services.control_ipc import request_control_action
 from services.music.ipc import default_music_state, enqueue_music_command, load_music_state
 from server_manager import server_manager
@@ -34,10 +35,11 @@ def parse_int(value) -> Optional[int]:
 
 def read_env_settings() -> Dict[str, str]:
     values = {"token": "", "klipy_key": ""}
-    if not os.path.exists(".env"):
+    env_path = env_file_path()
+    if not env_path.exists():
         return values
 
-    with open(".env", "r", encoding="utf-8") as handle:
+    with env_path.open("r", encoding="utf-8") as handle:
         for raw_line in handle:
             line = raw_line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -57,9 +59,10 @@ def write_env_settings(token: str, klipy_key: str) -> None:
         "DISCORD_TOKEN": token or "",
         "KLIPY_API_KEY": klipy_key or "",
     }
+    env_path = env_file_path()
     lines = []
-    if os.path.exists(".env"):
-        with open(".env", "r", encoding="utf-8") as handle:
+    if env_path.exists():
+        with env_path.open("r", encoding="utf-8") as handle:
             lines = handle.readlines()
 
     seen = set()
@@ -84,7 +87,7 @@ def write_env_settings(token: str, klipy_key: str) -> None:
         if key not in seen:
             new_lines.append(f"{key}={value}\n")
 
-    with open(".env", "w", encoding="utf-8") as handle:
+    with env_path.open("w", encoding="utf-8") as handle:
         handle.writelines(new_lines)
 
 
@@ -116,10 +119,11 @@ def sanitize_filename(filename: str) -> str:
 
 
 def build_upload_path(filename: str) -> Path:
-    os.makedirs("temp", exist_ok=True)
+    temp_dir = data_path("temp")
+    temp_dir.mkdir(parents=True, exist_ok=True)
     timestamp = int(datetime.utcnow().timestamp())
     safe_name = sanitize_filename(filename)
-    return Path("temp") / f"{timestamp}_{os.urandom(4).hex()}_{safe_name}"
+    return temp_dir / f"{timestamp}_{os.urandom(4).hex()}_{safe_name}"
 
 
 async def resolve_guild_metadata(guild_id: int) -> Dict[str, Optional[str]]:
@@ -291,10 +295,11 @@ async def diagnostic(request: Request):
         db_path = server.get("db_path")
         size_mb = 0
         created_at = "Unknown"
-        if db_path and os.path.exists(db_path):
+        resolved_db_path = resolve_storage_path(db_path) if db_path else None
+        if resolved_db_path and resolved_db_path.exists():
             try:
-                size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2)
-                ctime = os.path.getctime(db_path)
+                size_mb = round(resolved_db_path.stat().st_size / (1024 * 1024), 2)
+                ctime = resolved_db_path.stat().st_ctime
                 created_at = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M")
             except Exception:
                 pass
@@ -303,7 +308,7 @@ async def diagnostic(request: Request):
             {
                 "name": server["name"],
                 "id": server["id"],
-                "db_path": db_path,
+                "db_path": str(resolved_db_path) if resolved_db_path else db_path,
                 "db_size": size_mb,
                 "created_at": created_at,
                 "is_current": current_server and server["id"] == current_server["id"],

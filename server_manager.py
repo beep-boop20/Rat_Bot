@@ -1,8 +1,9 @@
 import json
-import os
 from typing import Dict, List, Optional
 
-SERVERS_FILE = "servers.json"
+from paths import data_path
+
+SERVERS_FILE = data_path("servers.json")
 
 
 class ServerManager:
@@ -14,7 +15,7 @@ class ServerManager:
 
     def _get_file_mtime(self) -> Optional[float]:
         try:
-            return os.path.getmtime(SERVERS_FILE)
+            return SERVERS_FILE.stat().st_mtime
         except OSError:
             return None
 
@@ -40,14 +41,14 @@ class ServerManager:
         if not force and file_mtime == self._last_loaded_mtime:
             return
 
-        if not os.path.exists(SERVERS_FILE):
+        if not SERVERS_FILE.exists():
             self.servers = []
             self.current_server_id = None
             self._last_loaded_mtime = file_mtime
             return
 
         try:
-            with open(SERVERS_FILE, "r", encoding="utf-8") as handle:
+            with SERVERS_FILE.open("r", encoding="utf-8") as handle:
                 data = json.load(handle)
         except (OSError, json.JSONDecodeError) as exc:
             print(f"Error loading {SERVERS_FILE}: {exc}")
@@ -82,16 +83,16 @@ class ServerManager:
             "servers": self.servers,
             "current_server_id": self.current_server_id,
         }
-        temp_file = f"{SERVERS_FILE}.tmp"
+        temp_file = SERVERS_FILE.with_suffix(f"{SERVERS_FILE.suffix}.tmp")
         try:
-            with open(temp_file, "w", encoding="utf-8") as handle:
+            with temp_file.open("w", encoding="utf-8") as handle:
                 json.dump(data, handle, indent=4, ensure_ascii=False)
-            os.replace(temp_file, SERVERS_FILE)
+            temp_file.replace(SERVERS_FILE)
             self._last_loaded_mtime = self._get_file_mtime()
         except OSError as exc:
             print(f"Error saving {SERVERS_FILE}: {exc}")
             try:
-                os.remove(temp_file)
+                temp_file.unlink()
             except OSError:
                 pass
 

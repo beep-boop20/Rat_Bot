@@ -35,6 +35,51 @@ A Discord music bot with a web dashboard. Play music from YouTube in your voice 
 
 5. **Open the dashboard**: [http://localhost:7734](http://localhost:7734)
 
+## Docker Deployment (Homeserver)
+
+1. **Prepare persistent data**:
+   ```bash
+   mkdir -p data
+   cp .env.example data/.env
+   ```
+   Then edit `data/.env` and set `DISCORD_TOKEN` and `KLIPY_API_KEY`.
+   If you already have local data in project root, move it into `data/` first (`servers.json`, `ratbot_*.db`, `bot.log`, and `temp/` if needed).
+
+2. **Build and start**:
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. **Check health/logs**:
+   ```bash
+   docker compose ps
+   docker compose logs -f
+   ```
+
+4. **Open dashboard**: [http://localhost:7734](http://localhost:7734)
+   The compose file binds the dashboard to `127.0.0.1` by default for safety.  
+   If you need LAN access, change port mapping in `docker-compose.yml` to `7734:7734`.
+
+### Safe Updates
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+### Backup / Restore
+
+Backup:
+```bash
+tar -czf ratbot-data-backup.tar.gz data
+```
+
+Restore:
+```bash
+tar -xzf ratbot-data-backup.tar.gz
+docker compose up -d --build
+```
+
 ## Discord Bot Setup
 
 1. Create an application at the [Discord Developer Portal](https://discord.com/developers/applications)
@@ -67,6 +112,8 @@ A Discord music bot with a web dashboard. Play music from YouTube in your voice 
 - Removed restart/shutdown flag files in favor of queue-based supervisor control.
 - Switched restart flow to a non-recursive supervisor loop for cleaner process lifecycle handling.
 - Removed runtime Discord voice version/encryption checks from bot startup; dependency version is enforced by `requirements.txt`.
+- Added `RATBOT_DATA_DIR` storage routing so `.env`, `servers.json`, DB files, logs, and uploads can persist in one mounted directory.
+- Added Docker deployment artifacts (`Dockerfile`, `docker-compose.yml`, `.dockerignore`) with healthcheck and hardened container defaults.
 
 ## License
 

@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 import datetime
 
+from paths import resolve_storage_path
+
 Base = declarative_base()
 
 
@@ -37,8 +39,9 @@ class DatabaseManager:
     def get_engine(self, guild_id: int):
         if guild_id not in self._engines:
             from server_manager import server_manager
-            db_path = server_manager.get_db_path(guild_id)
-            url = f"sqlite+aiosqlite:///./{db_path}"
+            db_path = resolve_storage_path(server_manager.get_db_path(guild_id))
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            url = f"sqlite+aiosqlite:///{db_path.resolve().as_posix()}"
             self._engines[guild_id] = create_async_engine(url, echo=False)
         return self._engines[guild_id]
 

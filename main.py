@@ -10,10 +10,11 @@ import time
 import uvicorn
 from dotenv import load_dotenv
 
+from paths import ensure_data_dir, env_file_path
 from services.control_ipc import parse_control_message
 
 # Load environment variables
-load_dotenv()
+load_dotenv(dotenv_path=env_file_path())
 
 
 def is_port_in_use(port: int) -> bool:
@@ -39,7 +40,7 @@ def run_web(shared_state, command_queue, control_queue):
 def run_bot(shared_state, command_queue):
     """Runs the Discord Bot."""
     sys.path.append(os.getcwd())
-    load_dotenv(override=True)
+    load_dotenv(dotenv_path=env_file_path(), override=True)
     from services.music.ipc import configure_music_ipc
 
     configure_music_ipc(command_queue, shared_state)
@@ -114,6 +115,8 @@ def start_services(shared_state, command_queue, control_queue):
 
 def main():
     print("--- TheRatBot ---")
+    data_dir = ensure_data_dir()
+    print(f"Data directory: {data_dir}")
 
     # Check Port 7734 once before supervisor starts.
     if is_port_in_use(7734):

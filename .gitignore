@@ -8,6 +8,7 @@ venv/
 .DS_Store
 bot.log
 temp/
+data/
 archives/
 music_state.json
 music_history.json
