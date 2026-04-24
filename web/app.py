@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 import aiohttp
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -199,7 +199,7 @@ def template_context(request: Request, current_server, **extra):
 
 @app.get("/favicon.ico")
 async def favicon():
-    return JSONResponse(content={}, status_code=204)
+    return Response(status_code=204)
 
 
 @app.get("/")
