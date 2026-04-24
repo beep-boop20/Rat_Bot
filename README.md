@@ -37,12 +37,15 @@ A Discord music bot with a web dashboard. Play music from YouTube in your voice 
 
 ## Docker Deployment (Homeserver)
 
-1. **Prepare persistent data**:
+1. **Prepare persistent data and runtime env**:
    ```bash
    mkdir -p data
-   cp .env.example data/.env
+   cp .env.example .env
    ```
-   Then edit `data/.env` and set `DISCORD_TOKEN` and `KLIPY_API_KEY`.
+   Then edit `.env` and set:
+   - `DASHBOARD_BIND_IP` to your Alpine VM LAN IP (for example `192.168.1.50`)
+   - `DISCORD_TOKEN`
+   - `KLIPY_API_KEY`
    If you already have local data in project root, move it into `data/` first (`servers.json`, `ratbot_*.db`, `bot.log`, and `temp/` if needed).
 
 2. **Build and start**:
@@ -56,9 +59,8 @@ A Discord music bot with a web dashboard. Play music from YouTube in your voice 
    docker compose logs -f
    ```
 
-4. **Open dashboard**: [http://localhost:7734](http://localhost:7734)
-   The compose file binds the dashboard to `127.0.0.1` by default for safety.  
-   If you need LAN access, change port mapping in `docker-compose.yml` to `7734:7734`.
+4. **Open dashboard**: `http://<ALPINE_VM_IP>:7734`
+   The compose file now requires `DASHBOARD_BIND_IP` and binds only to that address.
 
 ### Safe Updates
 

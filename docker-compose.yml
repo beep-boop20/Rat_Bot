@@ -10,9 +10,10 @@ services:
       RATBOT_DATA_DIR: /app/data
       TZ: Europe/Warsaw
     ports:
-      - "127.0.0.1:7734:7734"
+      - "${DASHBOARD_BIND_IP:?Set DASHBOARD_BIND_IP}:7734:7734"
     volumes:
       - ./data:/app/data
+      - ./.env:/app/.env
     healthcheck:
       test:
         [

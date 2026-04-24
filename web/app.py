@@ -15,8 +15,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
+from config import ENV_FILE_PATH
 from database import MusicHistory, SystemStatus, db_manager
-from paths import env_file_path, data_path, resolve_storage_path
+from paths import data_path, resolve_storage_path
 from services.control_ipc import request_control_action
 from services.music.ipc import default_music_state, enqueue_music_command, load_music_state
 from server_manager import server_manager
@@ -35,21 +36,20 @@ def parse_int(value) -> Optional[int]:
 
 def read_env_settings() -> Dict[str, str]:
     values = {"token": "", "klipy_key": ""}
-    env_path = env_file_path()
-    if not env_path.exists():
+    try:
+        with ENV_FILE_PATH.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+
+                key, value = line.split("=", 1)
+                if key == "DISCORD_TOKEN":
+                    values["token"] = value
+                elif key in {"KLIPY_API_KEY", "TENOR_API_KEY"} and not values["klipy_key"]:
+                    values["klipy_key"] = value
+    except FileNotFoundError:
         return values
-
-    with env_path.open("r", encoding="utf-8") as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-
-            key, value = line.split("=", 1)
-            if key == "DISCORD_TOKEN":
-                values["token"] = value
-            elif key in {"KLIPY_API_KEY", "TENOR_API_KEY"} and not values["klipy_key"]:
-                values["klipy_key"] = value
 
     return values
 
@@ -59,11 +59,12 @@ def write_env_settings(token: str, klipy_key: str) -> None:
         "DISCORD_TOKEN": token or "",
         "KLIPY_API_KEY": klipy_key or "",
     }
-    env_path = env_file_path()
     lines = []
-    if env_path.exists():
-        with env_path.open("r", encoding="utf-8") as handle:
+    try:
+        with ENV_FILE_PATH.open("r", encoding="utf-8") as handle:
             lines = handle.readlines()
+    except FileNotFoundError:
+        lines = []
 
     seen = set()
     new_lines = []
@@ -87,7 +88,7 @@ def write_env_settings(token: str, klipy_key: str) -> None:
         if key not in seen:
             new_lines.append(f"{key}={value}\n")
 
-    with env_path.open("w", encoding="utf-8") as handle:
+    with ENV_FILE_PATH.open("w", encoding="utf-8") as handle:
         handle.writelines(new_lines)
 
 

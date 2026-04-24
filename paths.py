@@ -28,7 +28,3 @@ def resolve_storage_path(path_value: Union[str, os.PathLike[str]]) -> Path:
     if candidate.is_absolute():
         return candidate
     return data_path(candidate)
-
-
-def env_file_path() -> Path:
-    return ".env"

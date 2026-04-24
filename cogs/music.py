@@ -13,7 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import KLIPY_API_KEY
-from paths import data_path, env_file_path
+from paths import data_path
 from services.music.ipc import iter_music_commands
 from services.music.player import MusicPlayer
 from services.music.source import LocalFileSource, YTDLSource
@@ -54,21 +54,6 @@ class Music(commands.Cog):
         return temp_dir / f"{int(time.time())}_{uuid.uuid4().hex[:8]}_{safe_name}"
 
     def _get_klipy_api_key(self) -> str:
-        env_path = env_file_path()
-        if env_path.exists():
-            try:
-                with env_path.open("r", encoding="utf-8") as handle:
-                    for raw_line in handle:
-                        line = raw_line.strip()
-                        if not line or line.startswith("#") or "=" not in line:
-                            continue
-
-                        key, value = line.split("=", 1)
-                        if key in {"KLIPY_API_KEY", "TENOR_API_KEY"} and value.strip():
-                            return value.strip().strip("\"'")
-            except OSError:
-                pass
-
         env_value = (os.getenv("KLIPY_API_KEY") or os.getenv("TENOR_API_KEY") or "").strip()
         if env_value:
             return env_value.strip("\"'")

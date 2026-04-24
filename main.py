@@ -8,13 +8,10 @@ import sys
 import time
 
 import uvicorn
-from dotenv import load_dotenv
 
-from paths import ensure_data_dir, env_file_path
+from config import load_env
+from paths import ensure_data_dir
 from services.control_ipc import parse_control_message
-
-# Load environment variables
-load_dotenv(dotenv_path=env_file_path())
 
 
 def is_port_in_use(port: int) -> bool:
@@ -40,7 +37,7 @@ def run_web(shared_state, command_queue, control_queue):
 def run_bot(shared_state, command_queue):
     """Runs the Discord Bot."""
     sys.path.append(os.getcwd())
-    load_dotenv(dotenv_path=env_file_path(), override=True)
+    load_env(override=True)
     from services.music.ipc import configure_music_ipc
 
     configure_music_ipc(command_queue, shared_state)
