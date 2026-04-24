@@ -31,4 +31,4 @@ def resolve_storage_path(path_value: Union[str, os.PathLike[str]]) -> Path:
 
 
 def env_file_path() -> Path:
-    return data_path(".env")
+    return ".env"
