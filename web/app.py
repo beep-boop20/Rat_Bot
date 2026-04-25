@@ -231,6 +231,7 @@ async def dashboard(request: Request, db=Depends(get_db)):  # type: ignore[name-
     )
 
     return templates.TemplateResponse(
+        request,
         "index.html",
         template_context(
             request,
@@ -254,6 +255,7 @@ async def music(request: Request):
     bot_status = await get_bot_status(current_server)
 
     return templates.TemplateResponse(
+        request,
         "music.html",
         template_context(
             request,
@@ -271,6 +273,7 @@ async def settings(request: Request):
     settings_values = read_env_settings()
 
     return templates.TemplateResponse(
+        request,
         "settings.html",
         template_context(
             request,
@@ -324,6 +327,7 @@ async def diagnostic(request: Request):
     }
 
     return templates.TemplateResponse(
+        request,
         "diagnostic.html",
         template_context(
             request,
